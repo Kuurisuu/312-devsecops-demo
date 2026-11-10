@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = "devsecops-demo:${BUILD_NUMBER}"
+        IMAGE_NAME = "devsecops-demo-322:${BUILD_NUMBER}"
     }
 
     stages {
@@ -22,18 +22,32 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Analyze') {
             steps {
-                sh '''
-                    if docker container inspect devsecops-demo-app > /dev/null 2>&1; then
-                        docker rm -f devsecops-demo-app
-                    fi
+                script {
+                    def scannerHome = tool 'SonarScanner'
 
-                    docker run -d \
-                        --name devsecops-demo-app \
-                        -p 127.0.0.1:5001:5000 \
-                        "$IMAGE_NAME"
-                '''
+                    withEnv(["SCANNER_HOME=${scannerHome}"]) {
+                        withSonarQubeEnv('SonarQubeLocal') {
+                            withCredentials([
+                                string(
+                                    credentialsId: 'sonarqube-token-322',
+                                    variable: 'SONAR_TOKEN'
+                                )
+                            ]) {
+                                sh '''
+                                    "$SCANNER_HOME/bin/sonar-scanner" \
+                                        -Dsonar.projectKey=devsecops-demo-322 \
+                                        -Dsonar.projectVersion=1.0 \
+                                        -Dsonar.sources=app.py \
+                                        -Dsonar.tests=test_app.py \
+                                        -Dsonar.python.version=3.12 \
+                                        -Dsonar.sourceEncoding=UTF-8
+                                '''
+                            }
+                        }
+                    }
+                }
             }
         }
     }
