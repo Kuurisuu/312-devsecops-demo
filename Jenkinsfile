@@ -50,5 +50,48 @@ pipeline {
                 }
             }
         }
+
+        stage('Security Test') {
+            steps {
+                sh '''
+                    rm -rf dependency-input reports/dependency-check
+                    mkdir -p dependency-input reports/dependency-check
+
+                    docker run --rm -i "$IMAGE_NAME" python - \
+                        < export_dependencies.py \
+                        > dependency-metadata.tar
+
+                    tar -xf dependency-metadata.tar -C dependency-input
+                    rm dependency-metadata.tar
+                '''
+
+                dependencyCheck(
+                    odcInstallation: 'DependencyCheck',
+                    nvdCredentialsId: 'nvd-api-key',
+                    stopBuild: true,
+                    additionalArguments: '''
+                        --scan dependency-input
+                        --enableExperimental
+                        --format HTML
+                        --format XML
+                        --out reports/dependency-check
+                        --data /var/jenkins_home/dependency-check-data
+                    '''
+                )
+
+                dependencyCheckPublisher(
+                    pattern: 'reports/dependency-check/dependency-check-report.xml'
+                )
+            }
+
+            post {
+                always {
+                    archiveArtifacts(
+                        artifacts: 'reports/dependency-check/*',
+                        allowEmptyArchive: true
+                    )
+                }
+            }
+        }
     }
 }
